@@ -2,6 +2,7 @@ package com.example.gaze_nav
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.Intent
 import android.graphics.ImageFormat
 import android.hardware.camera2.*
 import android.media.Image
@@ -50,18 +51,39 @@ class NativeCameraTracker(
     private var sX = 0.0; private var sY = 0.0
     private var s2X = 0.0; private var s2Y = 0.0
     private var emaInit = false
-    private val a1 = 0.22; private val a2 = 0.30
-    private val deadZone = 0.012
+    private val a1 = 0.35; private val a2 = 0.45  // more responsive — less lag when aiming
+    private val deadZone = 0.006  // smaller dead zone — finer cursor control
     private val edgeThreshold = 0.6; private val edgeFactor = 1.5
 
     private var frameCount = 0
     private var lastLogTime = 0L
 
+
+    // ── Native blink detection ────────────────────────────────────────────
+    // Mirrors the Flutter BlinkDetector logic so blinks work when overlay is active
+    private var blinkSmooth = 1.0
+    private val blinkAlpha = 0.65
+    private val blinkCloseThresh = 0.5
+    private val blinkOpenThresh  = 0.6
+    private val blinkMinMs  = 80L
+    private val blinkMaxMs  = 500L
+    private val doubleBlinkWindowMs = 1800L
+
+    private var blinkState = 0          // 0=open, 1=closing/closed
+    private var blinkCloseTime = 0L
+    private var firstBlinkTime = 0L
+    private var blinkCount = 0
+    // ─────────────────────────────────────────────────────────────────────
     fun start() {
         if (isRunning) return
         isRunning = true
         emaInit = false
         frameCount = 0
+        blinkSmooth = 1.0
+        blinkState = 0
+        blinkCloseTime = 0L
+        firstBlinkTime = 0L
+        blinkCount = 0
         lastLogTime = System.currentTimeMillis()
 
         Log.d(TAG, "Starting native tracker...")
@@ -73,7 +95,7 @@ class NativeCameraTracker(
         val opts = FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
             .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
-            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_NONE)
+            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
             .build()
         faceDetector = FaceDetection.getClient(opts)
 
@@ -201,6 +223,11 @@ class NativeCameraTracker(
         val nose = face.getLandmark(FaceLandmark.NOSE_BASE)
         if (leftEye == null || rightEye == null) return
 
+        // Process blink detection from eye classification data
+        val leftOpen  = face.leftEyeOpenProbability  ?: 1f
+        val rightOpen = face.rightEyeOpenProbability ?: 1f
+        processNativeBlink(((leftOpen + rightOpen) / 2.0).toDouble())
+
         frameCount++
 
         // Log every 2 seconds
@@ -247,6 +274,64 @@ class NativeCameraTracker(
         val sy = ((1.0 + outY) / 2.0 * screenHeight).toFloat()
 
         onCursorUpdate(sx, sy)
+    }
+
+
+    /**
+     * Stateful blink detector running entirely in the native tracker.
+     * Fires ACTION_DOUBLE_BLINK when two quick blinks are detected within the window.
+     * This is needed because when the overlay is running Flutter's camera pipeline
+     * is paused, so the Dart BlinkDetector never receives eye data.
+     */
+    private fun processNativeBlink(eyeOpenProb: Double) {
+        blinkSmooth += (eyeOpenProb - blinkSmooth) * blinkAlpha
+        val now = System.currentTimeMillis()
+
+        when (blinkState) {
+            0 -> { // OPEN — watching for eyes closing
+                if (blinkSmooth < blinkCloseThresh) {
+                    blinkState = 1
+                    blinkCloseTime = now
+                    if (blinkCount == 0) firstBlinkTime = now
+                }
+                // Expire the double-blink window
+                if (blinkCount == 1 && firstBlinkTime > 0 &&
+                    now - firstBlinkTime > doubleBlinkWindowMs) {
+                    blinkCount = 0
+                    firstBlinkTime = 0L
+                }
+            }
+            1 -> { // CLOSED — watching for eyes reopening
+                if (blinkSmooth > blinkOpenThresh) {
+                    val elapsed = now - blinkCloseTime
+                    blinkState = 0
+                    if (elapsed in blinkMinMs..blinkMaxMs) {
+                        // Valid quick blink
+                        blinkCount++
+                        Log.d(TAG, "Native blink #$blinkCount (${elapsed}ms)")
+                        if (blinkCount >= 2) {
+                            val windowMs = now - firstBlinkTime
+                            if (windowMs <= doubleBlinkWindowMs) {
+                                Log.d(TAG, "Native DOUBLE BLINK detected (${windowMs}ms) -> firing TAP")
+                                fireDoubleBlink()
+                            }
+                            blinkCount = 0
+                            firstBlinkTime = 0L
+                        }
+                    } else {
+                        // Blink too long or too short — reset
+                        blinkCount = 0
+                        firstBlinkTime = 0L
+                    }
+                }
+            }
+        }
+    }
+
+    private fun fireDoubleBlink() {
+        val intent = Intent(GazeAccessibilityService.ACTION_DOUBLE_BLINK)
+        intent.setPackage(context.packageName)
+        context.sendBroadcast(intent)
     }
 
     private fun edgeBoost(v: Double): Double {

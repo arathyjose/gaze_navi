@@ -1,6 +1,4 @@
-/// ===========================================================================
-/// Unity Game Screen - Launches Unity game as separate app via Intent
-/// ===========================================================================
+
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

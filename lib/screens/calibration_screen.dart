@@ -1,19 +1,4 @@
-/// ===========================================================================
-/// GazeNav - Calibration Screen
-/// ===========================================================================
-/// 9-point calibration flow: shows dots at known screen positions and
-/// collects gaze samples while the user looks at each dot.
-///
-/// Flow:
-///   1. Show instruction
-///   2. For each of 9 points:
-///      a. Show animated dot at target position
-///      b. Wait for user to fixate (2 seconds)
-///      c. Collect gaze samples during fixation
-///      d. Move to next point
-///   3. Compute calibration mapping
-///   4. Show accuracy test
-/// ===========================================================================
+
 
 import 'dart:async';
 import 'package:flutter/material.dart';

@@ -1,6 +1,7 @@
 package com.example.gaze_nav
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import android.util.Log
@@ -12,12 +13,49 @@ class MainActivity : FlutterActivity() {
 
     companion object {
         const val CHANNEL = "com.gaze_nav/native"
+        const val UNITY_CHANNEL = "com.gazenav/unity"
+        const val UNITY_PACKAGE = "com.gazenav.roadcrossing"
         const val TAG = "GazeNavMain"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // ── Unity launch channel ──────────────────────────────────────────────
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, UNITY_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "launchUnity" -> {
+                        try {
+                            val launchIntent: Intent? =
+                                packageManager.getLaunchIntentForPackage(UNITY_PACKAGE)
+                            if (launchIntent != null) {
+                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                startActivity(launchIntent)
+                                result.success(true)
+                            } else {
+                                // APK not installed – Flutter will show the warning card
+                                result.success(false)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Unity launch failed: ${e.message}")
+                            result.error("LAUNCH_FAILED", e.message, null)
+                        }
+                    }
+                    "isUnityInstalled" -> {
+                        val installed = try {
+                            packageManager.getPackageInfo(UNITY_PACKAGE, 0)
+                            true
+                        } catch (e: PackageManager.NameNotFoundException) {
+                            false
+                        }
+                        result.success(installed)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // ── Accessibility / overlay channel ───────────────────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 try {

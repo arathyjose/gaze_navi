@@ -1,22 +1,4 @@
-/// ===========================================================================
-/// GazeNav v5.1 - HEAD TRACKING ENGINE (Adaptive Range)
-/// ===========================================================================
-///
-/// Strategy: Track the MIDPOINT between both eye landmarks as a stable
-/// facial anchor point. As the head moves, this point shifts in camera
-/// space. Map that shift to screen cursor movement.
-///
-/// v5.1 IMPROVEMENT: Adaptive range calibration
-/// ─────────────────────────────────────────────
-/// After center calibration, a RANGE CALIBRATION phase asks the user
-/// to look at 4 screen edges. The engine measures the actual displacement
-/// at each edge and calculates per-axis sensitivity so that the user's
-/// comfortable head tilt range maps exactly to the full screen.
-///
-/// If range calibration is skipped, an AUTO-RANGING system gradually
-/// learns the user's range over time and adjusts dynamically.
-///
-/// ===========================================================================
+
 
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -71,15 +53,15 @@ class HeadTrackingEngine {
   double _smoothX = 0, _smoothY = 0;
   double _smooth2X = 0, _smooth2Y = 0;
   bool _smoothInit = false;
-  static const double _alpha1 = 0.22;
-  static const double _alpha2 = 0.30;
+  static const double _alpha1 = 0.35;  // more responsive
+  static const double _alpha2 = 0.45;
 
   // ── Fusion weights ──
   static const double _eyeMidWeight = 0.55;
   static const double _noseWeight = 0.45;
 
   // ── Dead zone ──
-  static const double _deadZone = 0.012;
+  static const double _deadZone = 0.006;  // finer aiming
 
   // ── Edge acceleration: boost when near edges for easier edge reach ──
   static const double _edgeBoostThreshold = 0.6;  // Start boosting past 60%

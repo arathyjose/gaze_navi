@@ -119,76 +119,109 @@ class GazeAccessibilityService : AccessibilityService() {
 
     fun performGazeGesture(type: GestureType) {
         Log.d(TAG, "Gesture: $type")
-        val path = Path()
-        val duration = 300L
 
         when (type) {
-            GestureType.SWIPE_UP -> {
-                path.moveTo(screenWidth / 2f, screenHeight - 50f)
-                path.lineTo(screenWidth / 2f, screenHeight / 3f)
-            }
-            GestureType.SWIPE_DOWN -> {
-                path.moveTo(screenWidth / 2f, 10f)
-                path.lineTo(screenWidth / 2f, screenHeight * 2f / 3f)
-            }
-            GestureType.SWIPE_DOWN_SHORT -> {
-                // Short swipe to expand quick settings further
-                path.moveTo(screenWidth / 2f, screenHeight / 4f)
-                path.lineTo(screenWidth / 2f, screenHeight / 2f)
-            }
-            GestureType.SWIPE_UP_SHORT -> {
-                // Short swipe up to collapse quick settings
-                path.moveTo(screenWidth / 2f, screenHeight / 2f)
-                path.lineTo(screenWidth / 2f, screenHeight / 4f)
-            }
-            GestureType.SWIPE_LEFT -> {
-                path.moveTo(screenWidth - 50f, screenHeight / 2f)
-                path.lineTo(50f, screenHeight / 2f)
-            }
-            GestureType.SWIPE_RIGHT -> {
-                path.moveTo(50f, screenHeight / 2f)
-                path.lineTo(screenWidth - 50f, screenHeight / 2f)
-            }
+
+            // ── System actions ──────────────────────────────────────────────
             GestureType.GO_HOME -> {
                 performGlobalAction(GLOBAL_ACTION_HOME)
-                overlayManager?.setMode(NavigationMode.HOME_SCREEN)
+                handler.postDelayed({ overlayManager?.setMode(NavigationMode.HOME_SCREEN) }, 400)
                 return
             }
             GestureType.GO_BACK -> {
                 performGlobalAction(GLOBAL_ACTION_BACK)
                 return
             }
+            GestureType.GO_RECENTS -> {
+                performGlobalAction(GLOBAL_ACTION_RECENTS)
+                // Switch to IN_APP so user can dwell-tap a recent app card
+                handler.postDelayed({ overlayManager?.setMode(NavigationMode.IN_APP) }, 600)
+                return
+            }
+
+            // ── Toolbar mode-switches ───────────────────────────────────────
+            GestureType.TB_HOME -> {
+                performGlobalAction(GLOBAL_ACTION_HOME)
+                handler.postDelayed({ overlayManager?.setMode(NavigationMode.HOME_SCREEN) }, 400)
+                return
+            }
+            GestureType.TB_IN_APP -> {
+                overlayManager?.setMode(NavigationMode.IN_APP)
+                return
+            }
+            GestureType.TB_NOTIF -> {
+                dispatchSwipe(screenPath(screenWidth/2f, 10f, screenWidth/2f, screenHeight*2f/3f), 300L)
+                handler.postDelayed({ overlayManager?.setMode(NavigationMode.QUICK_SETTINGS) }, 500)
+                return
+            }
+
+            // ── Tap at cursor position ──────────────────────────────────────
+            // Works in ALL modes: home screen icons, app drawer apps, in-app buttons
+            GestureType.TAP -> {
+                val pos = overlayManager?.getCursorPosition() ?: return
+                val path = Path().apply { moveTo(pos.first, pos.second); lineTo(pos.first + 1f, pos.second + 1f) }
+                dispatchSwipe(path, 50L)
+                return
+            }
+
+            // ── Long-press at cursor position ───────────────────────────────
+            // Opens context menus, selects text, triggers drag
+            GestureType.LONG_PRESS -> {
+                val pos = overlayManager?.getCursorPosition() ?: return
+                val path = Path().apply { moveTo(pos.first, pos.second); lineTo(pos.first + 1f, pos.second + 1f) }
+                dispatchSwipe(path, 1000L)
+                return
+            }
+
+            // ── Swipes ──────────────────────────────────────────────────────
+            GestureType.SWIPE_UP -> {
+                dispatchSwipe(screenPath(screenWidth/2f, screenHeight-50f, screenWidth/2f, screenHeight/3f), 300L)
+                handler.postDelayed({ overlayManager?.setMode(NavigationMode.APPS_DRAWER) }, 500)
+                return
+            }
+            GestureType.SWIPE_DOWN -> {
+                dispatchSwipe(screenPath(screenWidth/2f, 10f, screenWidth/2f, screenHeight*2f/3f), 300L)
+                handler.postDelayed({ overlayManager?.setMode(NavigationMode.QUICK_SETTINGS) }, 500)
+                return
+            }
+            GestureType.SWIPE_DOWN_SHORT -> {
+                dispatchSwipe(screenPath(screenWidth/2f, screenHeight/4f, screenWidth/2f, screenHeight/2f), 250L)
+                return
+            }
+            GestureType.SWIPE_UP_SHORT -> {
+                dispatchSwipe(screenPath(screenWidth/2f, screenHeight/2f, screenWidth/2f, screenHeight/4f), 250L)
+                return
+            }
+            GestureType.SWIPE_LEFT -> {
+                dispatchSwipe(screenPath(screenWidth-50f, screenHeight/2f, 50f, screenHeight/2f), 300L)
+                return
+            }
+            GestureType.SWIPE_RIGHT -> {
+                dispatchSwipe(screenPath(50f, screenHeight/2f, screenWidth-50f, screenHeight/2f), 300L)
+                return
+            }
+
+            // ── In-app scroll ─────────────────────────────────────────────
+            // Always swipe at screen CENTER X — the cursor sits on the overlay
+            // button at the far edge, so using cursor X would start the swipe
+            // outside the scrollable content area and nothing would happen.
             GestureType.SCROLL_UP -> {
-                path.moveTo(screenWidth / 2f, screenHeight * 2f / 3f)
-                path.lineTo(screenWidth / 2f, screenHeight / 3f)
+                val cx = screenWidth / 2f
+                dispatchSwipe(screenPath(cx, screenHeight * 0.70f, cx, screenHeight * 0.25f), 400L)
+                return
             }
             GestureType.SCROLL_DOWN -> {
-                path.moveTo(screenWidth / 2f, screenHeight / 3f)
-                path.lineTo(screenWidth / 2f, screenHeight * 2f / 3f)
-            }
-            GestureType.TAP -> {
-                val pos = overlayManager?.getCursorPosition()
-                if (pos != null) {
-                    path.moveTo(pos.first, pos.second)
-                    path.lineTo(pos.first, pos.second)
-                    dispatchSwipe(path, 50L)
-                }
+                val cx = screenWidth / 2f
+                dispatchSwipe(screenPath(cx, screenHeight * 0.25f, cx, screenHeight * 0.70f), 400L)
                 return
             }
         }
-
-        dispatchSwipe(path, duration)
-
-        when (type) {
-            GestureType.SWIPE_UP -> {
-                handler.postDelayed({ overlayManager?.setMode(NavigationMode.APPS_DRAWER) }, 500)
-            }
-            GestureType.SWIPE_DOWN -> {
-                handler.postDelayed({ overlayManager?.setMode(NavigationMode.QUICK_SETTINGS) }, 500)
-            }
-            else -> {}
-        }
     }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    private fun screenPath(x1: Float, y1: Float, x2: Float, y2: Float): Path =
+        Path().apply { moveTo(x1, y1); lineTo(x2, y2) }
 
     private fun dispatchSwipe(path: Path, duration: Long) {
         val stroke = GestureDescription.StrokeDescription(path, 0, duration)
@@ -205,13 +238,27 @@ class GazeAccessibilityService : AccessibilityService() {
 }
 
 enum class GestureType {
-    SWIPE_UP, SWIPE_DOWN, SWIPE_DOWN_SHORT, SWIPE_UP_SHORT,
+    // Swipes (home screen navigation + in-app)
+    SWIPE_UP, SWIPE_DOWN,
+    SWIPE_DOWN_SHORT, SWIPE_UP_SHORT,
     SWIPE_LEFT, SWIPE_RIGHT,
-    GO_HOME, GO_BACK,
+
+    // System nav
+    GO_HOME, GO_BACK, GO_RECENTS,
+
+    // In-app scroll (repeating)
     SCROLL_UP, SCROLL_DOWN,
-    TAP
+
+    // Tap / long-press at cursor position
+    TAP, LONG_PRESS,
+
+    // Toolbar mode-switch buttons
+    TB_HOME, TB_IN_APP, TB_NOTIF
 }
 
 enum class NavigationMode {
-    HOME_SCREEN, APPS_DRAWER, QUICK_SETTINGS
+    HOME_SCREEN,      // launcher d-pad
+    APPS_DRAWER,      // app-drawer scroll + tap to open
+    QUICK_SETTINGS,   // notification shade
+    IN_APP            // free-cursor control inside any open app
 }

@@ -71,7 +71,7 @@ git clone https://github.com/arathyjose/gaze_navi.git
 
 | Cursor Control Screen | Calibration Screen |
 |---|---|
-| <img width="1344" height="1068" alt="app_button" src="https://github.com/user-attachments/assets/d18da89f-22a0-4742-8c4f-2e0a53c95f70" />
+| <img width="1344" height="1068" alt="app_button" src="https://github.com/user-attachments/assets/d18da89f-22a0-4742-8c4f-2e0a53c95f70" />|
  | <img width="762" height="1600" alt="gaze_cali" src="https://github.com/user-attachments/assets/a1217ebd-99cf-4ffa-af26-b92a7c4c0962" />
  |
 
